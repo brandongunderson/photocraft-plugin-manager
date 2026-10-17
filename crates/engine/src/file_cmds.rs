@@ -219,6 +219,29 @@ pub(crate) fn stem(path: &str) -> String {
     }
 }
 
+/// Whether `a` and `b` name the same file: the same text, or, when both exist, the same file on
+/// disk (a hard link, a different case on a case-insensitive volume, `./` or `..` in one of them).
+pub fn same_file(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(x), Ok(y)) = (std::fs::metadata(a), std::fs::metadata(b)) {
+            return x.dev() == y.dev() && x.ino() == y.ino();
+        }
+    }
+    #[cfg(windows)]
+    {
+        // NTFS and FAT compare names without case.
+        if let (Ok(x), Ok(y)) = (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+            return x.to_string_lossy().to_lowercase() == y.to_string_lossy().to_lowercase();
+        }
+    }
+    false
+}
+
 pub(crate) fn join(dir: &str, name: &str) -> String {
     if dir.is_empty() {
         name.to_string()

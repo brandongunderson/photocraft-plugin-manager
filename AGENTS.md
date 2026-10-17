@@ -170,6 +170,8 @@ Keep rejected installations in the separate non-executable recovery registry. Bi
 review/removal to the record fingerprint and activation captured at discovery; do not weaken
 concurrent-host guards to repair an incompatible plugin. Managed data stays intact by default,
 and corrupt metadata never authorizes deleting unverified payloads or another plugin's files.
+Keep `--disable-plugins` recognized and documented in desktop help when changing startup parsing;
+recovery startup must bypass the managed store and preserve settings and installed payloads.
 Worker protocol 2 is an explicit verified runtime/worker-v2.json opt-in; never probe or silently
 change a worker's declared launch contract. Each installation/generation owns its persistent process and data.
 

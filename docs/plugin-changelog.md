@@ -4,6 +4,14 @@ This log covers the shared plugin integration in [pull request #6479](https://gi
 Dates identify integration changes, not PhotoCraft application releases. Each independent
 plugin keeps its release history in its own repository.
 
+## 2026-10-17
+
+### Fixed
+
+- Preserve plugin recovery startup alongside upstream's command-line help and strict option
+  parsing. List `--disable-plugins` in desktop help and cover its recognition in the existing
+  command-line tests.
+
 ## 2026-10-16
 
 ### Added

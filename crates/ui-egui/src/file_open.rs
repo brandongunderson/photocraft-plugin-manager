@@ -121,6 +121,9 @@ impl PhotocraftApp {
     /// Read and open the file at `path` (see [`open_file`](Self::open_file)).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open_path(&mut self, path: &str) -> Result<Vec<String>, String> {
+        if self.show_if_open(path) {
+            return Ok(Vec::new());
+        }
         // Documents opening in the background are read on the worker too (a 2 GB PSB read
         // would block the window). Preset files (brushes, gradients) go the usual way.
         let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
@@ -147,6 +150,10 @@ impl PhotocraftApp {
         let batch = crate::jobs_ui::begin_batch(self);
         let mut opened = 0;
         for (seq, abs) in paths.iter().enumerate() {
+            // Not a member of the set: its tab is already in place.
+            if self.show_if_open(abs) {
+                continue;
+            }
             let order = crate::jobs_ui::OpenOrder { batch, seq };
             let pending = self.jobs.opens.len();
             match self.open_path(abs) {
@@ -164,6 +171,26 @@ impl PhotocraftApp {
         }
         crate::jobs_ui::end_batch(&mut self.jobs);
         opened
+    }
+
+    /// Show the document already open from the file at `path`, or its tab while it is still
+    /// opening in the background, as Photoshop does, rather than open a second copy bound to the
+    /// same file (#6598). True when there was one.
+    pub(crate) fn show_if_open(&mut self, path: &str) -> bool {
+        let canon = canonical(path);
+        let same = |p: &str| same_file(p, path, canon.as_deref());
+        if let Some(i) = self.session.documents().iter().position(|d| d.path.as_deref().is_some_and(same)) {
+            self.session.set_active(i);
+            self.jobs.focus = None;
+        } else if let Some(o) = self.jobs.opens.iter().find(|o| o.path.as_deref().is_some_and(|p| !is_template(p) && same(p))) {
+            // A template still loading opens as another Untitled, as it does once loaded.
+            self.jobs.focus = Some(o.job);
+        } else {
+            return false;
+        }
+        // The document count didn't change, so the Home screen wouldn't give way by itself.
+        self.ui.chrome.home = None;
+        true
     }
 
     /// Show "Couldn't open <name>: <error>" as an error (status bar + notice).
@@ -356,6 +383,26 @@ fn absolute(p: &str) -> String {
 #[cfg(target_arch = "wasm32")]
 fn absolute(p: &str) -> String {
     p.to_string()
+}
+
+/// `path` with symlinks, `.` and `..` and (on case-insensitive volumes) letter case resolved;
+/// `None` when it can't be (a missing file).
+#[cfg(not(target_arch = "wasm32"))]
+fn canonical(path: &str) -> Option<std::path::PathBuf> {
+    std::fs::canonicalize(path).ok()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn canonical(_path: &str) -> Option<std::path::PathBuf> {
+    None
+}
+
+/// Whether an open document's path `p` names the file at `path` (`canon`: its [`canonical`]
+/// form). The cheap comparisons come first: `p` is resolved on disk only when they fail, so an
+/// open of a file that isn't open costs one resolution per document. A file moved or deleted
+/// since it was opened only matches its old path as written.
+fn same_file(p: &str, path: &str, canon: Option<&std::path::Path>) -> bool {
+    p == path || canon.is_some_and(|c| std::path::Path::new(p) == c || canonical(p).is_some_and(|q| q == c))
 }
 
 #[cfg(test)]
